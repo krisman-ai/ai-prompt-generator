@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Optional
 import os
 
-from openai import OpenAI
+import google.generativeai as genai
 
 
+# ===== Data input (tetap sama) =====
 @dataclass
 class PromptInputs:
     role: str
@@ -20,76 +21,59 @@ class PromptInputs:
     language: str
 
 
-ROLE_SYSTEM: Dict[str, str] = {
-    "Marketer": "You are a senior performance marketer and conversion copywriter.",
-    "Designer": "You are a brand designer and creative director who writes clear design briefs.",
-    "ChatGPT User": "You are an expert prompt engineer who writes precise, testable prompts.",
-    "Student": "You are an academic writing coach who explains step by step.",
-    "Business": "You are a business strategist who turns ideas into execution plans.",
-}
+# ===== Base prompt template =====
+def build_base_prompt(inputs: PromptInputs) -> str:
+    parts = [
+        f"ROLE:\n{inputs.role}",
+        f"TASK:\n{inputs.task}",
+        f"GOAL:\n{inputs.goal}",
+        f"AUDIENCE:\n{inputs.audience}",
+        f"TONE:\n{inputs.tone}",
+    ]
 
-TASK_HINTS: Dict[str, str] = {
-    "Write Caption": "Write 3 strong captions with hooks, value, and CTA.",
-    "Generate Content Ideas": "Generate 15 content ideas with angles and formats.",
-    "Landing Page Copy": "Write landing page copy (headline, benefits, CTA).",
-    "Design Brief": "Create a complete design brief.",
-    "Email": "Write a structured email with CTA.",
-    "Prompt Improvement": "Rewrite the prompt to be clearer and higher quality.",
-}
+    if inputs.context.strip():
+        parts.append(f"CONTEXT:\n{inputs.context}")
 
+    if inputs.constraints.strip():
+        parts.append(f"CONSTRAINTS:\n{inputs.constraints}")
 
-def build_base_prompt(p: PromptInputs) -> str:
-    system_role = ROLE_SYSTEM.get(p.role, ROLE_SYSTEM["ChatGPT User"])
-    task_hint = TASK_HINTS.get(p.task, p.task)
+    if inputs.output_format.strip():
+        parts.append(f"OUTPUT FORMAT:\n{inputs.output_format}")
 
-    return f"""
-{system_role}
+    if inputs.language.strip():
+        parts.append(f"LANGUAGE:\n{inputs.language}")
 
-TASK:
-{task_hint}
-
-GOAL:
-{p.goal}
-
-AUDIENCE:
-{p.audience}
-
-TONE:
-{p.tone}
-
-CONTEXT:
-{p.context}
-
-CONSTRAINTS:
-{p.constraints}
-
-OUTPUT FORMAT:
-{p.output_format}
-
-LANGUAGE:
-{p.language}
-
-RULES:
-- Be specific
-- Avoid generic advice
-- Ask clarifying questions if needed
-""".strip()
-
-
-def refine_prompt_with_openai(
-    base_prompt: str,
-    api_key: Optional[str] = None,
-    model: str = "gpt-4.1-mini",
-) -> str:
-    key = api_key or os.getenv("OPENAI_API_KEY")
-    if not key:
-        raise RuntimeError("OPENAI_API_KEY belum diisi")
-
-    client = OpenAI(api_key=key)
-
-    response = client.responses.create(
-        model=model,
-        input=f"Improve this prompt:\n\n{base_prompt}",
+    parts.append(
+        "\nINSTRUCTIONS:\n"
+        "Write a single high-quality prompt that the user can paste into an AI tool.\n"
+        "Make it clear, structured, and actionable.\n"
+        "Add placeholders like {PRODUCT}, {OFFER}, {DATE} if helpful.\n"
     )
 
-    return response.output_text
+    return "\n\n".join(parts)
+
+
+# ===== Gemini refine =====
+def refine_with_ai(base_prompt: str, model_name: str = "gemini-1.5-flash") -> str:
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        raise RuntimeError("GOOGLE_API_KEY is missing. Add it in Streamlit Secrets.")
+
+    genai.configure(api_key=api_key)
+
+    model = genai.GenerativeModel(model_name)
+    response = model.generate_content(
+        [
+            "You are a helpful assistant that improves prompts. "
+            "Rewrite the prompt to be clearer, more specific, and more effective.",
+            base_prompt,
+        ]
+    )
+
+    # response.text biasanya sudah ada
+    text = getattr(response, "text", None)
+    if not text:
+        # fallback kalau format response berubah
+        text = str(response)
+
+    return text.strip()
