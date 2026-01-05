@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
-import google.generativeai as genai
+
+from google import genai
 
 
-# 1) Ini yang diminta app.py
 @dataclass
 class PromptInputs:
     role: str
@@ -19,7 +19,6 @@ class PromptInputs:
     output_format: str = ""
 
 
-# 2) Ini yang diminta app.py
 def build_base_prompt(p: PromptInputs) -> str:
     parts = [
         f"ROLE:\n{p.role}",
@@ -38,23 +37,35 @@ def build_base_prompt(p: PromptInputs) -> str:
 
     parts.append(
         "\nINSTRUCTIONS:\n"
-        "Write a high-quality prompt that is clear, specific, and ready to paste into ChatGPT.\n"
-        "Include variables/placeholders if needed.\n"
+        "Rewrite this into a single high-quality prompt that is clear, specific, and ready to paste into ChatGPT.\n"
+        "Keep it concise but complete. Use bullet points if helpful.\n"
     )
-
     return "\n\n".join(parts)
 
 
-# 3) Ini yang diminta app.py
 def refine_with_ai(base_prompt: str, model_name: str = "gemini-1.5-flash") -> str:
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
         raise ValueError("GOOGLE_API_KEY belum diisi di Streamlit Secrets")
 
-    genai.configure(api_key=api_key)
+    client = genai.Client(api_key=api_key)
 
-    model = genai.GenerativeModel(model_name)
-    resp = model.generate_content(base_prompt)
+    # fallback biar jarang error kalau satu model lagi “ngambek”
+    candidates = [model_name, "gemini-1.5-pro", "gemini-1.0-pro"]
 
-    # Aman kalau kosong
-    return (getattr(resp, "text", None) or "").strip() or "Refine berhasil tapi output kosong."
+    last_err = None
+    for m in candidates:
+        try:
+            resp = client.models.generate_content(
+                model=m,
+                contents=base_prompt,
+            )
+            text = (getattr(resp, "text", None) or "").strip()
+            if text:
+                return text
+            return "Refine berhasil tapi output kosong."
+        except Exception as e:
+            last_err = e
+            continue
+
+    raise RuntimeError(f"Gagal refine di semua model. Error terakhir: {last_err}")
