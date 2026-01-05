@@ -2,12 +2,10 @@ import streamlit as st
 
 from prompt_engine import PromptInputs, build_base_prompt, refine_with_ai
 
-
 st.set_page_config(page_title="AI Prompt Generator", page_icon="🧠", layout="wide")
 
 st.title("🧠 AI Prompt Generator (Portfolio Tool)")
 st.caption("Bikin prompt berkualitas tinggi untuk marketer, designer, dan ChatGPT user — pakai Google Gemini API.")
-
 
 # --- Sidebar inputs
 st.sidebar.header("Input")
@@ -26,7 +24,16 @@ output_format = st.sidebar.text_area("Output format (opsional)", value="")
 # --- Model selection
 st.sidebar.divider()
 st.sidebar.subheader("AI Settings (Gemini)")
-selected_model = st.sidebar.selectbox("Model", ["gemini-1.5-flash", "gemini-1.5-pro"], index=0)
+selected_model = st.sidebar.selectbox(
+    "Model",
+    [
+        "gemini-2.0-flash-001",
+        "gemini-2.0-pro-001",
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+    ],
+    index=0,
+)
 temperature = st.sidebar.slider("Temperature", 0.0, 1.0, 0.5, 0.1)
 
 # --- Build base prompt
@@ -68,7 +75,7 @@ with col1:
 
 with col2:
     st.subheader("2) AI-Refined Prompt (Gemini API)")
-    st.caption("Saat deploy, isi GOOGLE_API_KEY di Streamlit Secrets.")
+    st.caption("Saat deploy, isi GOOGLE_API_KEY (atau GEMINI_API_KEY) di Streamlit Secrets.")
 
     st.write(f"**Model:** `{selected_model}`")
 
@@ -77,11 +84,10 @@ with col2:
             st.error("Base prompt masih kosong. Klik Generate Base Prompt dulu.")
         else:
             try:
-                refined_prompt = refine_with_ai(
-    base_prompt=base_prompt,
-    model=selected_model
-)
-
+                refined = refine_with_ai(
+                    base_prompt=base_prompt,
+                    model=selected_model,
+                    temperature=temperature,
                 )
                 st.session_state["refined_prompt"] = refined
                 st.success("Berhasil refine! ✅")
@@ -102,4 +108,3 @@ with col2:
         file_name="refined_prompt.txt",
         mime="text/plain"
     )
-
