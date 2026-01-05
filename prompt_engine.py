@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Optional
 import os
 
-import google.generativeai as genai
+from google import genai
 
 
 @dataclass
@@ -21,9 +21,7 @@ class PromptInputs:
 
 
 def build_base_prompt(p: PromptInputs) -> str:
-    """Build base (template) prompt without calling any API."""
     parts = []
-
     parts.append("You are an expert prompt engineer. You write precise, testable prompts.\n")
 
     parts.append(f"LANGUAGE: {p.language}\n")
@@ -48,13 +46,14 @@ def build_base_prompt(p: PromptInputs) -> str:
         "- Make it structured (sections + bullet points).\n"
         "- Include any necessary assumptions.\n"
         "- Add a short checklist for quality.\n"
+        "- Output ONLY the final prompt text.\n"
     )
 
     return "\n".join(parts).strip()
 
 
 def _get_google_api_key() -> str:
-    key = os.getenv("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY".lower())
+    key = os.getenv("GOOGLE_API_KEY")
     if not key:
         raise RuntimeError("GOOGLE_API_KEY belum diisi di Streamlit Secrets.")
     return key
@@ -64,35 +63,26 @@ def refine_with_ai(
     base_prompt: str,
     model: str = "gemini-1.5-flash",
     temperature: float = 0.5,
-    max_output_tokens: int = 800,
+    max_output_tokens: int = 900,
 ) -> str:
-    """
-    Refine the base prompt using Google Gemini API (google-generativeai).
-    IMPORTANT: parameter name is `model` (NOT model_name).
-    """
-
     api_key = _get_google_api_key()
-    genai.configure(api_key=api_key)
+    client = genai.Client(api_key=api_key)
 
-    # Create model
-    gm = genai.GenerativeModel(model)
-
-    # Make refinement instruction
     instruction = (
         "Refine the following prompt to be clearer, more actionable, and higher quality.\n"
-        "Return ONLY the improved final prompt, no extra explanations.\n\n"
+        "Return ONLY the improved final prompt, no explanations.\n\n"
         f"PROMPT TO REFINE:\n{base_prompt}"
     )
 
-    resp = gm.generate_content(
-        instruction,
-        generation_config={
+    resp = client.models.generate_content(
+        model=model,
+        contents=instruction,
+        config={
             "temperature": temperature,
             "max_output_tokens": max_output_tokens,
         },
     )
 
-    # Safety: handle empty
     text = getattr(resp, "text", None)
     if not text or not text.strip():
         raise RuntimeError("Gemini tidak mengembalikan output. Coba lagi.")
