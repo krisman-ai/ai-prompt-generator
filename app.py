@@ -1,26 +1,36 @@
 import streamlit as st
+
 from prompt_engine import PromptInputs, build_base_prompt, refine_with_ai
+
 
 st.set_page_config(page_title="AI Prompt Generator", page_icon="🧠", layout="wide")
 
 st.title("🧠 AI Prompt Generator (Portfolio Tool)")
 st.caption("Bikin prompt berkualitas tinggi untuk marketer, designer, dan ChatGPT user — pakai Google Gemini API.")
 
-# ===== Sidebar Inputs =====
+
+# --- Sidebar inputs
 st.sidebar.header("Input")
 
-role = st.sidebar.selectbox("Role", ["ChatGPT User", "Marketer", "Designer", "Content Writer", "Product Manager"])
-task = st.sidebar.selectbox("Task", ["Write Caption", "Write Script", "Write Landing Page", "Write Email", "Generate Ideas", "Write Brief"])
-goal = st.sidebar.text_input("Goal (tujuan)", "Meningkatkan engagement & konversi")
-audience = st.sidebar.text_input("Audience", "Pemula 18–30, Indonesia")
-tone = st.sidebar.selectbox("Tone", ["Friendly", "Professional", "Casual", "Bold", "Luxury", "Funny"])
-language = st.sidebar.selectbox("Language", ["Indonesian", "English"])
+role = st.sidebar.selectbox("Role", ["ChatGPT User", "Marketer", "Designer", "Content Writer"], index=0)
+task = st.sidebar.selectbox("Task", ["Write Caption", "Write Landing Page", "Write Email", "Create Design Brief"], index=0)
+goal = st.sidebar.text_input("Goal (tujuan)", value="Meningkatkan engagement & konversi")
+audience = st.sidebar.text_input("Audience", value="Pemula 18–30, Indonesia")
+tone = st.sidebar.selectbox("Tone", ["Friendly", "Professional", "Bold", "Luxury"], index=0)
+language = st.sidebar.selectbox("Language", ["Indonesian", "English"], index=0)
 
-context = st.sidebar.text_area("Context (opsional)", "")
-constraints = st.sidebar.text_area("Constraints (opsional)", "Singkat, jelas, ada CTA")
-output_format = st.sidebar.text_area("Output format (opsional)", "Bullet points + 3 variasi")
+context = st.sidebar.text_area("Context (opsional)", value="")
+constraints = st.sidebar.text_area("Constraints (opsional)", value="")
+output_format = st.sidebar.text_area("Output format (opsional)", value="")
 
-inputs = PromptInputs(
+# --- Model selection
+st.sidebar.divider()
+st.sidebar.subheader("AI Settings (Gemini)")
+selected_model = st.sidebar.selectbox("Model", ["gemini-1.5-flash", "gemini-1.5-pro"], index=0)
+temperature = st.sidebar.slider("Temperature", 0.0, 1.0, 0.5, 0.1)
+
+# --- Build base prompt
+p = PromptInputs(
     role=role,
     task=task,
     goal=goal,
@@ -32,57 +42,62 @@ inputs = PromptInputs(
     language=language,
 )
 
-col1, col2 = st.columns(2)
+col1, col2 = st.columns(2, gap="large")
 
-# ===== Left: Base Prompt =====
 with col1:
     st.subheader("1) Base Prompt (template)")
-    if st.button("🧩 Generate Base Prompt"):
-        st.session_state["base_prompt"] = build_base_prompt(inputs)
 
+    if st.button("🧩 Generate Base Prompt"):
+        st.session_state["base_prompt"] = build_base_prompt(p)
+
+    base_prompt = st.session_state.get("base_prompt", "")
     base_prompt = st.text_area(
         "Base prompt",
-        value=st.session_state.get("base_prompt", ""),
+        value=base_prompt,
         height=320,
         placeholder="Klik tombol Generate Base Prompt atau tulis manual di sini..."
     )
+    st.session_state["base_prompt"] = base_prompt
 
-    if base_prompt:
-        st.download_button(
-            "⬇️ Download Base Prompt (.txt)",
-            data=base_prompt,
-            file_name="base_prompt.txt",
-            mime="text/plain",
-        )
+    st.download_button(
+        "⬇️ Download Base Prompt (.txt)",
+        data=base_prompt or "",
+        file_name="base_prompt.txt",
+        mime="text/plain"
+    )
 
-# ===== Right: Gemini Refine =====
 with col2:
     st.subheader("2) AI-Refined Prompt (Gemini API)")
-    st.caption('Saat deploy, isi GOOGLE_API_KEY di Streamlit Secrets.')
+    st.caption("Saat deploy, isi GOOGLE_API_KEY di Streamlit Secrets.")
 
-    model_name = st.selectbox("Model", ["gemini-1.5-flash", "gemini-1.5-pro"])
+    st.write(f"**Model:** `{selected_model}`")
 
     if st.button("🤖 Refine with AI"):
-        try:
-            if not base_prompt.strip():
-                st.warning("Base prompt masih kosong. Buat dulu base prompt.")
-            else:
-                refined = refine_with_ai(base_prompt, model_name=model_name)
+        if not base_prompt.strip():
+            st.error("Base prompt masih kosong. Klik Generate Base Prompt dulu.")
+        else:
+            try:
+                refined = refine_with_ai(
+                    base_prompt=base_prompt,
+                    model=selected_model,      # ✅ FIX: model (bukan model_name)
+                    temperature=temperature,
+                )
                 st.session_state["refined_prompt"] = refined
-        except Exception as e:
-            st.error(f"Gagal refine: {e}")
+                st.success("Berhasil refine! ✅")
+            except Exception as e:
+                st.error(f"Gagal refine: {e}")
 
-    refined_prompt = st.text_area(
+    refined_prompt = st.session_state.get("refined_prompt", "")
+    st.text_area(
         "Refined prompt",
-        value=st.session_state.get("refined_prompt", ""),
+        value=refined_prompt,
         height=320,
         placeholder="Klik Refine with AI untuk menghasilkan prompt final..."
     )
 
-    if refined_prompt:
-        st.download_button(
-            "⬇️ Download Refined Prompt (.txt)",
-            data=refined_prompt,
-            file_name="refined_prompt.txt",
-            mime="text/plain",
-        )
+    st.download_button(
+        "⬇️ Download Refined Prompt (.txt)",
+        data=refined_prompt or "",
+        file_name="refined_prompt.txt",
+        mime="text/plain"
+    )
