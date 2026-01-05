@@ -77,10 +77,11 @@ with col2:
             st.error("Base prompt masih kosong. Klik Generate Base Prompt dulu.")
         else:
             try:
-                refined = refine_with_ai(
-                    base_prompt=base_prompt,
-                    model=selected_model,      # ✅ FIX: model (bukan model_name)
-                    temperature=temperature,
+                refined_prompt = refine_with_ai(
+    base_prompt=base_prompt,
+    model=selected_model
+)
+
                 )
                 st.session_state["refined_prompt"] = refined
                 st.success("Berhasil refine! ✅")
@@ -101,3 +102,4 @@ with col2:
         file_name="refined_prompt.txt",
         mime="text/plain"
     )
+
